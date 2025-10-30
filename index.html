@@ -8,7 +8,7 @@
 body { font-family: Arial; margin:15px; background:#fafafa; color:#333; }
 h2{text-align:center;margin-bottom:20px;}
 .form-container,.output-container{background:white;padding:12px;border-radius:10px;box-shadow:0 2px 8px rgba(0,0,0,0.1);margin-bottom:15px;}
-input,select{padding:8px;margin:5px 0;width:100%;border:1px solid #ccc;border-radius:6px;}
+input,select,textarea{padding:8px;margin:5px 0;width:100%;border:1px solid #ccc;border-radius:6px;}
 button{padding:9px 12px;margin:4px 3px;border:none;border-radius:8px;cursor:pointer;color:white;font-weight:bold;}
 .add-btn{background:#4CAF50;}
 .generate-btn{background:#2196F3;}
@@ -37,6 +37,12 @@ pre{background:#111;color:#0f0;padding:10px;border-radius:8px;overflow-x:auto;wh
 <label>Nama Gambar (jpg/png)</label>
 <input type="text" id="imageName" placeholder="Contoh: sosis.jpg">
 <button class="add-btn" onclick="addProduct()">+ Tambah Produk</button>
+</div>
+
+<div class="form-container">
+<label>Input JSON untuk Tambah Produk (array JS)</label>
+<textarea id="jsonInput" rows="6" placeholder="Paste JSON di sini..."></textarea>
+<button class="add-btn" onclick="addProductsFromJSON()">+ Tambah dari JSON</button>
 </div>
 
 <div class="form-container table-wrapper">
@@ -92,6 +98,23 @@ function addProduct(){
   document.getElementById('imageName').value='';
 }
 
+function addProductsFromJSON(){
+  const jsonText = document.getElementById('jsonInput').value.trim();
+  if(!jsonText){ alert('⚠️ JSON kosong!'); return; }
+  try{
+    const arr = JSON.parse(jsonText.replace(/'/g,'"')); // ubah kutip tunggal jadi ganda
+    if(!Array.isArray(arr)){ alert('⚠️ Format harus array!'); return; }
+    arr.forEach(p=>{
+      if(p.name && p.price && p.category && p.img){
+        products.push({name:p.name,price:Number(p.price),img:p.img,category:p.category});
+      }
+    });
+    saveLocal(); renderTable();
+    document.getElementById('jsonInput').value='';
+    alert('✅ Produk berhasil ditambahkan dari JSON!');
+  }catch(e){ alert('❌ JSON tidak valid! '+e); }
+}
+
 function deleteProduct(index){ products.splice(index,1); saveLocal(); renderTable(); }
 
 function generateJSON(){
@@ -124,13 +147,12 @@ async function uploadToGitHub(){
   const content = btoa(JSON.stringify(products,null,2));
 
   try{
-    // cek file dulu
     let sha;
     let check = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
       headers:{'Authorization':`token ${token}`}
     });
     let checkData = await check.json();
-    if(checkData.sha) sha = checkData.sha; // pakai SHA hanya kalau file ada
+    if(checkData.sha) sha = checkData.sha;
 
     const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
       method:'PUT',
@@ -143,7 +165,6 @@ async function uploadToGitHub(){
       })
     });
     const result = await res.json();
-    console.log(result);
     if(result.content) alert('✅ JSON berhasil diupload! Cek repo-mu.');
     else alert('❌ Upload gagal: '+JSON.stringify(result));
   }catch(e){ console.error(e); alert('❌ Gagal upload: '+e); }
