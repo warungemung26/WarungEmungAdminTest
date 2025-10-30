@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Admin Produk Warung Emung</title>
+  <style>
+    body { font-family: Arial; margin: 15px; background:#fafafa; color:#333; }
+    h2 { text-align:center; margin-bottom:20px; }
+    .form-container, .output-container { background:white; padding:12px; border-radius:10px; box-shadow:0 2px 8px rgba(0,0,0,0.1); margin-bottom:15px; }
+    input { padding:8px; margin:5px 0; width:100%; border:1px solid #ccc; border-radius:6px; }
+    button { padding:9px 12px; margin:4px 3px; border:none; border-radius:8px; cursor:pointer; color:white; font-weight:bold; }
+    .add-btn { background:#4CAF50; }
+    .generate-btn { background:#2196F3; }
+    .copy-btn { background:#FF9800; }
+    .download-btn { background:#00bcd4; }
+    .upload-btn { background:#9C27B0; }
+    .table-wrapper { overflow-x:auto; }
+    table { width:100%; border-collapse:collapse; margin-top:8px; min-width:480px; }
+    th, td { border:1px solid #ddd; padding:6px; text-align:center; font-size:14px; }
+    th { background:#f3f3f3; }
+    td button { background:#f44336; color:white; border:none; padding:5px 10px; border-radius:6px; cursor:pointer; }
+    pre { background:#111; color:#0f0; padding:10px; border-radius:8px; overflow-x:auto; white-space:pre-wrap; word-wrap:break-word; font-size:13px; }
+  </style>
+</head>
+<body>
+
+<h2>🛒 Admin Produk Warung Emung</h2>
+
+<div class="form-container">
+  <label>GitHub Personal Access Token (untuk latihan)</label>
+  <input type="text" id="githubToken" placeholder="Masukkan token di sini">
+</div>
+
+<div class="form-container">
+  <label>Nama Produk</label>
+  <input type="text" id="name" placeholder="Contoh: Sosis Bakar Mba Atin">
+  <label>Harga (Rp)</label>
+  <input type="number" id="price" placeholder="Contoh: 5000">
+  <label>Kategori</label>
+  <input type="text" id="category" placeholder="Contoh: makanan">
+  <label>Nama Gambar (jpg/png)</label>
+  <input type="text" id="imageName" placeholder="Contoh: sosis.jpg">
+  <button class="add-btn" onclick="addProduct()">+ Tambah Produk</button>
+</div>
+
+<div class="form-container table-wrapper">
+  <table id="productTable">
+    <thead>
+      <tr>
+        <th>No</th><th>Nama</th><th>Harga</th><th>Kategori</th><th>Gambar</th><th>Aksi</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+</div>
+
+<div class="output-container">
+  <button class="generate-btn" onclick="generateJSON()">💾 Generate JSON</button>
+  <button class="copy-btn" onclick="copyJSON()">📋 Copy</button>
+  <button class="download-btn" onclick="downloadJSON()">⬇️ Download JSON</button>
+  <button class="upload-btn" onclick="uploadToServer()">🚀 Upload & Merge</button>
+
+  <h3>Hasil Generate:</h3>
+  <pre id="jsonOutput">[ Kosong ]</pre>
+</div>
+
+<script>
+let products = JSON.parse(localStorage.getItem('products') || '[]');
+const tableBody = document.querySelector('#productTable tbody');
+const jsonOutput = document.getElementById('jsonOutput');
+
+function saveLocal() {
+  localStorage.setItem('products', JSON.stringify(products));
+}
+
+function renderTable() {
+  tableBody.innerHTML = '';
+  products.forEach((p,i)=>{
+    tableBody.innerHTML += `
+      <tr>
+        <td>${i+1}</td>
+        <td>${p.name}</td>
+        <td>${p.price}</td>
+        <td>${p.category}</td>
+        <td>${p.img}</td>
+        <td><button onclick="deleteProduct(${i})">Hapus</button></td>
+      </tr>`;
+  });
+}
+
+function addProduct(){
+  const name = document.getElementById('name').value.trim();
+  const price = document.getElementById('price').value.trim();
+  const category = document.getElementById('category').value.trim();
+  const imageName = document.getElementById('imageName').value.trim();
+  if(!name || !price || !category || !imageName){ alert('⚠️ Semua kolom harus diisi!'); return; }
+  const img = `images/${imageName}`;
+  products.push({name,price:Number(price),img,category});
+  saveLocal();
+  renderTable();
+  document.getElementById('name').value='';
+  document.getElementById('price').value='';
+  document.getElementById('category').value='';
+  document.getElementById('imageName').value='';
+}
+
+function deleteProduct(index){
+  products.splice(index,1);
+  saveLocal();
+  renderTable();
+}
+
+function generateJSON(){
+  if(products.length===0){ jsonOutput.textContent='[]'; return; }
+  jsonOutput.textContent = JSON.stringify(products,null,2);
+}
+
+function copyJSON(){
+  navigator.clipboard.writeText(jsonOutput.textContent)
+  .then(()=>alert('✅ Disalin ke clipboard!'))
+  .catch(()=>alert('❌ Gagal menyalin.'));
+}
+
+function downloadJSON(){
+  const dataStr = "data:text/json;charset=utf-8,"+encodeURIComponent(JSON.stringify(products,null,2));
+  const dlAnchor = document.createElement('a');
+  dlAnchor.setAttribute("href",dataStr);
+  dlAnchor.setAttribute("download","products.json");
+  dlAnchor.click();
+}
+
+function uploadToServer(){
+  fetch('upload.php',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify(products)
+  })
+  .then(res=>res.text())
+  .then(alert)
+  .catch(err=>alert('❌ Upload gagal: '+err));
+}
+
+renderTable();
+
+async function uploadToGitHub() {
+  if(products.length === 0){ alert('⚠️ Produk kosong!'); return; }
+
+  const token = document.getElementById('githubToken').value.trim();
+  if(!token){ alert('⚠️ Masukkan token GitHub!'); return; }
+
+  try{
+    // 1. Ambil SHA file lama
+    let res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`, {
+      headers: { 'Authorization': `token ${token}` }
+    });
+    let data = await res.json();
+    let sha = data.sha;  // SHA file lama
+
+    // 2. Encode JSON baru
+    const content = btoa(JSON.stringify(products, null, 2));
+
+    // 3. PUT update file
+    res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`, {
+      method:'PUT',
+      headers: { 
+        'Authorization': `token ${token}`, 
+        'Content-Type':'application/json' 
+      },
+      body: JSON.stringify({
+        message: "Update products via admin latihan",
+        content: content,
+        sha: sha,
+        branch: GITHUB_BRANCH
+      })
+    });
+    let result = await res.json();
+    console.log(result);
+    alert('✅ Berhasil upload ke GitHub!');
+  } catch(e){
+    console.error(e);
+    alert('❌ Gagal upload: ' + e);
+  }
+}
+
+
+</script>
+
+</body>
+</html>
