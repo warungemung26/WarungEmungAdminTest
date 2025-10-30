@@ -121,29 +121,31 @@ async function uploadToGitHub(){
   const GITHUB_REPO = 'WarungEmung';
   const FILE_PATH = 'products.json';
   const GITHUB_BRANCH = 'main';
+  const content = btoa(JSON.stringify(products,null,2));
 
   try{
-    let res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+    // cek file dulu
+    let sha;
+    let check = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
       headers:{'Authorization':`token ${token}`}
     });
-    let data = await res.json();
-    let sha = data.sha; // SHA lama
+    let checkData = await check.json();
+    if(checkData.sha) sha = checkData.sha; // pakai SHA hanya kalau file ada
 
-    const content = btoa(JSON.stringify(products,null,2));
-
-    res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
+    const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
       method:'PUT',
       headers:{'Authorization':`token ${token}`,'Content-Type':'application/json'},
       body:JSON.stringify({
         message:"Update products via admin latihan",
-        content:content,
-        sha:sha,
+        content: content,
+        sha: sha,
         branch:GITHUB_BRANCH
       })
     });
-    let result = await res.json();
+    const result = await res.json();
     console.log(result);
-    alert('✅ JSON berhasil diupload! Cek repo-mu.');
+    if(result.content) alert('✅ JSON berhasil diupload! Cek repo-mu.');
+    else alert('❌ Upload gagal: '+JSON.stringify(result));
   }catch(e){ console.error(e); alert('❌ Gagal upload: '+e); }
 }
 
