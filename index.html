@@ -15,12 +15,21 @@ button{padding:9px 12px;margin:4px 3px;border:none;border-radius:8px;cursor:poin
 .copy-btn{background:#FF9800;}
 .upload-btn{background:#9C27B0;}
 .backup-btn{background:#795548;}
+.danger-btn{background:#d32f2f;}
 .table-wrapper{overflow-x:auto;}
 table{width:100%;border-collapse:collapse;margin-top:8px;min-width:480px;}
-th,td{border:1px solid #ddd;padding:6px;text-align:center;font-size:14px;}
+th,td{border:1px solid #ddd;padding:6px;text-align:center;font-size:14px;vertical-align:middle;}
 th{background:#f3f3f3;}
 td button{background:#f44336;color:white;border:none;padding:5px 10px;border-radius:6px;cursor:pointer;}
+.renameable{color:#007bff;cursor:pointer;text-decoration:underline;display:inline-block;padding:2px 4px;border-radius:4px;}
+.renameable:hover{color:#0056b3;}
 pre{background:#111;color:#0f0;padding:10px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;font-size:13px;}
+.hidden-file{display:none;}
+.editable{outline: none; padding:2px 4px; display:inline-block; min-width:40px;}
+.file-action{background:transparent;border:none;cursor:pointer;font-size:16px;margin-left:6px;}
+.controls-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.small-note{font-size:12px;color:#555;margin-top:6px;background:#f9f9f9;padding:6px 8px;border-radius:6px;word-wrap:break-word;white-space:pre-wrap;}
+code{background:#eee;padding:2px 4px;border-radius:4px;font-family:monospace;display:inline-block;max-width:100%;overflow-wrap:break-word;}
 </style>
 </head>
 <body>
@@ -41,11 +50,27 @@ pre{background:#111;color:#0f0;padding:10px;border-radius:8px;overflow-x:auto;wh
 
 <div class="form-container">
 <label>Input JSON untuk Tambah Produk (array JS)</label>
-<textarea id="jsonInput" rows="6" placeholder="Paste JSON di sini..."></textarea>
-<button class="add-btn" onclick="addProductsFromJSON()">+ Tambah dari JSON</button>
+<textarea id="jsonInput" rows="6" placeholder='Contoh: [{"name":"Beras","price":10000,"img":"images/beras.jpg","category":"sembako"}]'></textarea>
+<div class="controls-row">
+  <button class="add-btn" onclick="addProductsFromJSON()">+ Tambah dari JSON</button>
+  <button class="backup-btn" onclick="downloadJSON()">⬇️ Backup JSON Lokal</button>
+</div>
+<div class="small-note">
+💡 Contoh format JSON yang benar:<br>
+<code>[
+  {"name":"Beras","price":10000,"img":"images/beras.jpg","category":"sembako"},
+  {"name":"Gula Pasir","price":15000,"img":"images/gula.jpg","category":"sembako"}
+]</code>
+</div>
 </div>
 
 <div class="form-container table-wrapper">
+<div style="display:flex;justify-content:space-between;align-items:center;">
+  <strong>Daftar Produk</strong>
+  <div>
+    <button class="danger-btn" onclick="clearAllProducts()">🗑️ Hapus Semua Produk</button>
+  </div>
+</div>
 <table id="productTable">
 <thead>
 <tr><th>No</th><th>Nama</th><th>Harga</th><th>Kategori</th><th>Gambar</th><th>Aksi</th></tr>
@@ -57,39 +82,55 @@ pre{background:#111;color:#0f0;padding:10px;border-radius:8px;overflow-x:auto;wh
 <div class="form-container">
 <label>GitHub Token</label>
 <input type="text" id="githubToken" placeholder="Masukkan token di sini">
-<button class="upload-btn" onclick="uploadToGitHub()">🚀 Upload ke GitHub</button>
-<button class="backup-btn" onclick="downloadJSON()">⬇️ Backup JSON Lokal</button>
+<div class="controls-row">
+  <button class="upload-btn" onclick="uploadToGitHub()">🚀 Upload ke GitHub</button>
+  <button class="generate-btn" onclick="generateJSON()">💾 Generate Format JS</button>
+  <button class="copy-btn" onclick="copyJSON()">📋 Copy</button>
+</div>
 </div>
 
 <div class="output-container">
-<button class="generate-btn" onclick="generateJSON()">💾 Generate Format JS</button>
-<button class="copy-btn" onclick="copyJSON()">📋 Copy</button>
-<h3>Hasil Generate:</h3>
+<h3>Hasil Generate (textarea) — pakai kutip ganda</h3>
 <pre id="jsonOutput">[ Kosong ]</pre>
 </div>
+
+<input type="file" id="filePicker" accept="image/*" class="hidden-file">
 
 <script>
 let products = JSON.parse(localStorage.getItem('products') || '[]');
 const tableBody = document.querySelector('#productTable tbody');
 const jsonOutput = document.getElementById('jsonOutput');
+const filePicker = document.getElementById('filePicker');
+let renameTargetIndex = null;
 
 function saveLocal(){ localStorage.setItem('products', JSON.stringify(products)); }
+function sanitizeFileName(name){ return name.replace(/[:\/\\?%*|"<>]/g, '').trim(); }
+
 function renderTable(){
   tableBody.innerHTML = '';
   products.forEach((p,i)=>{
-    tableBody.innerHTML += `<tr>
-<td>${i+1}</td><td>${p.name}</td><td>${p.price}</td><td>${p.category}</td><td>${p.img}</td>
-<td><button onclick="deleteProduct(${i})">Hapus</button></td></tr>`;
+    const fileName = (p.img || '').split('/').pop() || '';
+    tableBody.innerHTML += `
+      <tr data-index="${i}">
+        <td>${i+1}</td>
+        <td><span class="editable" contenteditable="true" data-field="name" onblur="cellEdited(event, ${i})" onkeydown="onEditableKey(event)">${escapeHtml(p.name)}</span></td>
+        <td><span class="editable" contenteditable="true" data-field="price" onblur="cellEdited(event, ${i})" onkeydown="onEditableKey(event)">${p.price}</span></td>
+        <td><span class="editable" contenteditable="true" data-field="category" onblur="cellEdited(event, ${i})" onkeydown="onEditableKey(event)">${escapeHtml(p.category)}</span></td>
+        <td><span class="editable" contenteditable="true" data-field="img" onblur="cellEdited(event, ${i})" onkeydown="onEditableKey(event)">${escapeHtml(fileName)}</span>
+        <button class="file-action" title="Pilih file dari HP untuk mengganti gambar" onclick="triggerFilePicker(${i})">📁</button></td>
+        <td><button onclick="deleteProduct(${i})">Hapus</button></td>
+      </tr>`;
   });
 }
 
+function escapeHtml(str){ return String(str||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
 function addProduct(){
   const name=document.getElementById('name').value.trim();
   const price=document.getElementById('price').value.trim();
   const category=document.getElementById('category').value.trim();
   const imageName=document.getElementById('imageName').value.trim();
   if(!name||!price||!category||!imageName){alert('⚠️ Semua kolom harus diisi!');return;}
-  const img=`images/${imageName}`;
+  const img=`images/${sanitizeFileName(imageName)}`;
   products.push({name,price:Number(price),img,category});
   saveLocal(); renderTable();
   document.getElementById('name').value='';
@@ -102,11 +143,13 @@ function addProductsFromJSON(){
   const jsonText = document.getElementById('jsonInput').value.trim();
   if(!jsonText){ alert('⚠️ JSON kosong!'); return; }
   try{
-    const arr = JSON.parse(jsonText.replace(/'/g,'"')); // ubah kutip tunggal jadi ganda
+    const arr = JSON.parse(jsonText.replace(/'/g,'"')); 
     if(!Array.isArray(arr)){ alert('⚠️ Format harus array!'); return; }
     arr.forEach(p=>{
       if(p.name && p.price && p.category && p.img){
-        products.push({name:p.name,price:Number(p.price),img:p.img,category:p.category});
+        let imgPath = p.img;
+        if(!imgPath.includes('/')) imgPath = 'images/' + sanitizeFileName(imgPath);
+        products.push({name:p.name,price:Number(p.price),img:imgPath,category:p.category});
       }
     });
     saveLocal(); renderTable();
@@ -115,63 +158,51 @@ function addProductsFromJSON(){
   }catch(e){ alert('❌ JSON tidak valid! '+e); }
 }
 
-function deleteProduct(index){ products.splice(index,1); saveLocal(); renderTable(); }
-
-function generateJSON(){
-  if(products.length===0){ jsonOutput.textContent='[ Kosong ]'; return; }
-  let jsArray='[\n';
-  products.forEach((p,i)=>{
-    jsArray += ` {name:'${p.name}',price:${p.price},img:'${p.img}',category:'${p.category}'}${i<products.length-1?',':''}\n`;
-  });
-  jsArray += '];';
-  jsonOutput.textContent = jsArray;
+function deleteProduct(index){ if(confirm('Yakin ingin menghapus produk ini?')){ products.splice(index,1); saveLocal(); renderTable(); } }
+function clearAllProducts(){
+  if(!products.length){ alert('Daftar produk kosong.'); return; }
+  if(confirm('Hapus semua produk?')){ products=[]; saveLocal(); renderTable(); jsonOutput.textContent='[ Kosong ]'; alert('✅ Semua produk dihapus.'); }
 }
 
-function copyJSON(){ navigator.clipboard.writeText(jsonOutput.textContent).then(()=>alert('✅ Disalin ke clipboard!')).catch(()=>alert('❌ Gagal menyalin.')); }
-
-function downloadJSON(){
-  const blob = new Blob([JSON.stringify(products,null,2)],{type:'application/json'});
-  const url = URL.createObjectURL(blob);
-  const a=document.createElement('a'); a.href=url; a.download='products.json'; a.click();
-  URL.revokeObjectURL(url);
+function onEditableKey(e){ if(e.key==='Enter'){ e.preventDefault(); e.target.blur(); } }
+function cellEdited(e, index){
+  const field=e.target.getAttribute('data-field'); if(!field) return;
+  let val=e.target.textContent.trim();
+  if(field==='price'){const num=Number(val.replace(/[^0-9.\-]/g,''));if(isNaN(num)){alert('Harga harus angka');e.target.textContent=products[index].price;return;}products[index].price=num;}
+  else if(field==='img'){if(val===''){alert('Nama gambar tidak boleh kosong');e.target.textContent=(products[index].img||'').split('/').pop();return;}
+    const safe=sanitizeFileName(val);const base=(products[index].img?.lastIndexOf('/')>=0)?products[index].img.substring(0,products[index].img.lastIndexOf('/')+1):'images/';
+    products[index].img=base+safe;e.target.textContent=safe;}
+  else{products[index][field]=val;}
+  saveLocal();
 }
 
+function triggerFilePicker(i){renameTargetIndex=i;filePicker.click();}
+filePicker.addEventListener('change', e=>{
+  if(renameTargetIndex===null||!e.target.files.length)return;
+  const file=e.target.files[0],idx=renameTargetIndex;
+  const targetName=(products[idx].img||'').split('/').pop()||file.name;
+  const basePath=(products[idx].img?.lastIndexOf('/')>=0)?products[idx].img.substring(0,products[idx].img.lastIndexOf('/')+1):'images/';
+  const renamedFile=new File([file],sanitizeFileName(targetName),{type:file.type});
+  const url=URL.createObjectURL(renamedFile);
+  const a=document.createElement('a');a.href=url;a.download=sanitizeFileName(targetName);document.body.appendChild(a);a.click();document.body.removeChild(a);URL.revokeObjectURL(url);
+  alert(`✅ File baru tersimpan: ${targetName}`);
+  products[idx].img=basePath+sanitizeFileName(targetName);saveLocal();renderTable();renameTargetIndex=null;filePicker.value='';
+});
+
+function generateJSON(){if(!products.length){jsonOutput.textContent='[ Kosong ]';return;}
+  jsonOutput.textContent=JSON.stringify(products,null,2);}
+function copyJSON(){const t=jsonOutput.textContent;if(!t||t==='[ Kosong ]'){alert('Tidak ada JSON untuk disalin.');return;}
+  navigator.clipboard.writeText(t).then(()=>alert('✅ Disalin ke clipboard!')).catch(()=>alert('❌ Gagal menyalin.'));}
+function downloadJSON(){const blob=new Blob([JSON.stringify(products,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='products.json';a.click();URL.revokeObjectURL(url);}
 async function uploadToGitHub(){
-  const token = document.getElementById('githubToken').value.trim();
-  if(!token){ alert('Masukkan token!'); return; }
-
-  const GITHUB_USERNAME = 'warungemung26';
-  const GITHUB_REPO = 'WarungEmung';
-  const FILE_PATH = 'products.json';
-  const GITHUB_BRANCH = 'main';
-  const content = btoa(JSON.stringify(products,null,2));
-
-  try{
-    let sha;
-    let check = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
-      headers:{'Authorization':`token ${token}`}
-    });
-    let checkData = await check.json();
-    if(checkData.sha) sha = checkData.sha;
-
-    const res = await fetch(`https://api.github.com/repos/${GITHUB_USERNAME}/${GITHUB_REPO}/contents/${FILE_PATH}`,{
-      method:'PUT',
-      headers:{'Authorization':`token ${token}`,'Content-Type':'application/json'},
-      body:JSON.stringify({
-        message:"Update products via admin latihan",
-        content: content,
-        sha: sha,
-        branch:GITHUB_BRANCH
-      })
-    });
-    const result = await res.json();
-    if(result.content) alert('✅ JSON berhasil diupload! Cek repo-mu.');
-    else alert('❌ Upload gagal: '+JSON.stringify(result));
-  }catch(e){ console.error(e); alert('❌ Gagal upload: '+e); }
-}
-
+  const token=document.getElementById('githubToken').value.trim();if(!token){alert('Masukkan token!');return;}
+  const u='warungemung26',r='WarungEmung',p='products.json',b='main';
+  const c=btoa(JSON.stringify(products,null,2));
+  try{let sha;let res=await fetch(`https://api.github.com/repos/${u}/${r}/contents/${p}`,{headers:{'Authorization':`token ${token}`}});let d=await res.json();if(d.sha)sha=d.sha;
+  const up=await fetch(`https://api.github.com/repos/${u}/${r}/contents/${p}`,{method:'PUT',headers:{'Authorization':`token ${token}`,'Content-Type':'application/json'},body:JSON.stringify({message:'Update products via admin latihan',content:c,sha:sha,branch:b})});
+  const out=await up.json();if(out.content)alert('✅ JSON berhasil diupload!');else alert('❌ Upload gagal: '+JSON.stringify(out));}
+  catch(e){alert('❌ Gagal upload: '+e);}}
 renderTable();
 </script>
-
 </body>
 </html>
