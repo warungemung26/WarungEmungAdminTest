@@ -468,3 +468,58 @@ document.addEventListener('DOMContentLoaded', () => {
   // tampil awal
   updatePreview();
 });
+
+// ===== HAPUS FILE DARI GITHUB REPO =====
+async function deleteFileFromGitHub(filePath) {
+  const token = document.getElementById('githubToken').value.trim();
+  if (!token) return alert('⚠️ Masukkan GitHub Token Anda terlebih dahulu.');
+
+  const owner = 'WarungEmung26'; // ganti dengan username GitHub kamu
+  const repo = 'WarungEmung';    // ganti dengan repo kamu
+  const branch = 'main';         // biasanya "main" atau "master"
+
+  if (!filePath) return alert('⚠️ Path file belum ditentukan.');
+  if (!confirm(`Yakin ingin menghapus file:\n${filePath} ?`)) return;
+
+  try {
+    // Ambil SHA file
+    const resMeta = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json'
+      }
+    });
+    if (!resMeta.ok) throw new Error('File tidak ditemukan atau token salah');
+    const data = await resMeta.json();
+
+    // Hapus file
+    const resDel = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json'
+      },
+      body: JSON.stringify({
+        message: `Hapus file ${filePath} via Admin WarungEmung`,
+        sha: data.sha,
+        branch: branch
+      })
+    });
+
+    if (resDel.ok) {
+      alert(`✅ File berhasil dihapus: ${filePath}`);
+    } else {
+      const txt = await resDel.text();
+      alert(`❌ Gagal menghapus file:\n${txt}`);
+    }
+
+  } catch (err) {
+    alert('❌ Terjadi error: ' + err.message);
+  }
+}
+
+function hapusFileRepo() {
+  const path = document.getElementById('filePathDelete').value.trim();
+  if (!path) return alert('Masukkan path file yang ingin dihapus!');
+  deleteFileFromGitHub(path);
+}
