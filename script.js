@@ -364,3 +364,107 @@ async function uploadToGitHub() {
   saveLocal();
   renderTable();
 })();
+
+// ==========================
+// 🔹 UPLOAD GAMBAR MASSAL FIX FINAL
+// ==========================
+document.addEventListener('DOMContentLoaded', () => {
+
+  const filePicker = document.getElementById('filePicker');
+  const previewArea = document.getElementById('previewArea');
+  const uploadMassalBtn = document.getElementById('uploadMassalBtn');
+  if (!filePicker || !uploadMassalBtn) return; // jika elemen belum ada, hentikan saja (aman)
+
+  let selectedFiles = [];
+
+  // Saat user pilih gambar
+  filePicker.addEventListener('change', (e) => {
+    const newFiles = Array.from(e.target.files);
+    selectedFiles = selectedFiles.concat(newFiles);
+    updatePreview();
+  });
+
+  function updatePreview() {
+    previewArea.innerHTML = '';
+    if (selectedFiles.length === 0) {
+      previewArea.innerHTML = '<small class="muted">Belum ada gambar dipilih.</small>';
+      return;
+    }
+    selectedFiles.forEach((file, index) => {
+      const div = document.createElement('div');
+      div.className = 'preview-item';
+      div.innerHTML = `
+        <img src="${URL.createObjectURL(file)}" class="thumb">
+        <span>${file.name}</span>
+        <button onclick="removeFile(${index})" class="remove-btn">❌</button>
+      `;
+      previewArea.appendChild(div);
+    });
+  }
+
+  window.removeFile = (index) => {
+    selectedFiles.splice(index, 1);
+    updatePreview();
+  };
+
+  uploadMassalBtn.addEventListener('click', async () => {
+    if (selectedFiles.length === 0) return alert('⚠️ Belum ada gambar yang dipilih!');
+    const token = document.getElementById('githubToken').value.trim();
+    if (!token) return alert('❌ Masukkan GitHub Token dulu.');
+
+    const repoOwner = 'WarungEmung26'; // ubah sesuai username GitHub kamu
+    const repoName = 'WarungEmung';    // ubah sesuai repository kamu
+    const imagePath = 'images';        // folder tujuan upload
+
+    uploadMassalBtn.disabled = true;
+    uploadMassalBtn.textContent = '⏳ Mengupload...';
+
+    for (let i = 0; i < selectedFiles.length; i++) {
+      const file = selectedFiles[i];
+      const content = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result.split(',')[1]);
+        reader.readAsDataURL(file);
+      });
+
+      const safeName = file.name.replace(/[:\/\\?%*|"<>]/g, '');
+      const apiUrl = `https://api.github.com/repos/${repoOwner}/${repoName}/contents/${imagePath}/${safeName}`;
+      const message = `Upload ${safeName} via Admin WarungEmung`;
+
+      try {
+        const res = await fetch(apiUrl, {
+          method: 'PUT',
+          headers: {
+            'Authorization': `token ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ message, content })
+        });
+
+        if (res.ok) {
+          console.log(`✅ ${safeName} berhasil diupload`);
+        } else {
+          const errorText = await res.text();
+          console.error(`❌ Gagal upload ${safeName}`, errorText);
+          alert(`Gagal upload ${safeName}\n${errorText}`);
+        }
+      } catch (err) {
+        console.error('Error upload', err);
+        alert(`Terjadi error saat upload ${file.name}`);
+      }
+
+      // progress sederhana
+      uploadMassalBtn.textContent = `📤 ${i + 1}/${selectedFiles.length} diupload...`;
+    }
+
+    alert('✅ Semua gambar berhasil diupload!');
+    selectedFiles = [];
+    updatePreview();
+
+    uploadMassalBtn.disabled = false;
+    uploadMassalBtn.textContent = '🚀 Upload Gambar Massal';
+  });
+
+  // tampil awal
+  updatePreview();
+});
