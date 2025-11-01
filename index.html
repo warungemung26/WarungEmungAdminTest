@@ -92,6 +92,15 @@
     <button class="btn-backup" onclick="downloadJSON()">⬇️ Download JSON</button>
     <button class="btn-backup" onclick="exportToExcel()">⬇️ Export Excel</button>
   </div>
+
+  <!-- Upload gambar massal -->
+  <div class="controls">
+    <input type="file" id="filePicker" multiple accept="image/*">
+    <button class="btn-upload" id="uploadMassalBtn">🚀 Upload Gambar Massal</button>
+  </div>
+
+  <!-- Daftar preview gambar -->
+  <div id="previewArea" class="preview-area"></div>
 </div>
 
 <!-- OUTPUT -->
@@ -101,8 +110,6 @@
   <strong>Hasil Generate</strong>
   <pre id="jsonOutput">[ Kosong ]</pre>
 </div>
-
-<input id="filePicker" type="file" accept="image/*" style="display:none">
 
 <script src="script.js"></script>
 
