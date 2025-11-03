@@ -78,28 +78,39 @@ function renderTable() {
 }
 
 // ===== EDIT CELL =====
-function onCellBlur(ev) {
-  const el = ev.target;
-  const id = el.dataset.id;
-  const field = el.dataset.field;
-  if (!id || !field) return;
-  const idx = products.findIndex(x => x.id === id);
-  if (idx === -1) return;
-  const newVal = el.textContent.trim();
-  if (field === 'price') {
-    const num = Number(newVal.replace(/[^0-9.\-]/g, ''));
-    if (isNaN(num)) { alert('Harga harus angka'); el.textContent = products[idx].price; return; }
-    products[idx].price = num;
-  } else if (field === 'img') {
-    if (!newVal) { alert('Nama gambar tidak boleh kosong'); el.textContent = (products[idx].img || '').split('/').pop(); return; }
-    const safe = sanitizeFileName(newVal);
-    const base = (products[idx].img?.lastIndexOf('/') >= 0) ? products[idx].img.substring(0, products[idx].img.lastIndexOf('/') + 1) : 'images/';
-    products[idx].img = base + safe;
-    el.textContent = safe;
-  } else { products[idx][field] = newVal; }
-  saveLocal();
-  renderTable();
+function renderProductCards() {
+  const grid = document.getElementById('productCards');
+  if(!grid) return;
+  grid.innerHTML = '';
+  buildFilteredView();
+  filtered.forEach(p => {
+    const card = document.createElement('div');
+    card.className = 'product-card';
+    card.innerHTML = `
+      <img src="${p.img}" alt="${p.name}">
+      <div class="name" contenteditable="true" onblur="updateField('${p.id}','name',this.textContent)">${p.name}</div>
+      <div class="price" contenteditable="true" onblur="updateField('${p.id}','price',this.textContent)">${p.price}</div>
+      <div class="category" contenteditable="true" onblur="updateField('${p.id}','category',this.textContent)">${p.category}</div>
+      <div class="actions">
+        <button onclick="triggerFilePicker('${p.id}')">📁 Ganti Gambar</button>
+        <button onclick="deleteById('${p.id}')">🗑️ Hapus</button>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
 }
+
+function updateField(id, field, value) {
+  const idx = products.findIndex(p=>p.id===id); 
+  if(idx===-1) return;
+  if(field==='price') { 
+    const num=Number(value.replace(/[^0-9]/g,'')); 
+    products[idx].price=num||0; 
+  } else products[idx][field]=value;
+  saveLocal(); 
+  renderProductCards();
+}
+
 
 document.addEventListener('keydown', ev => {
   if (ev.key === 'Enter' && ev.target?.classList.contains('editable')) {
@@ -107,39 +118,133 @@ document.addEventListener('keydown', ev => {
   }
 });
 
-// ===== ADD & DELETE =====
+// hapus produk
+const deleteAllBtn = document.getElementById('deleteAllBtn');
+deleteAllBtn.addEventListener('click', () => {
+  if (!products.length) { showToast('Daftar produk kosong'); return; }
+  if(confirm('⚠️ Hapus semua produk? Tindakan ini tidak dapat dibatalkan.')) {
+    products = [];
+    saveLocal();
+    renderTable();
+    showToast('✅ Semua produk dihapus');
+  }
+});
+
+// ===== TAMBAH PRODUK MANUAL ANTI-DOBEL + TOAST =====
 function addProduct() {
   const n = document.getElementById('name').value.trim();
   const pr = Number(document.getElementById('price').value || 0);
-  const c = document.getElementById('category').value.trim();
+
+  let c = document.getElementById('categorySelect').value.trim();
+  if (c === 'custom') {
+    c = document.getElementById('customCategory').value.trim();
+  }
+
   const im = document.getElementById('imageName').value.trim();
-  if (!n || !pr || !c || !im) { alert('⚠️ Semua kolom harus diisi!'); return; }
-  products.push({ id: generateId(), name: n, price: pr, img: 'images/' + sanitizeFileName(im), category: c });
+
+  if (!n || !pr || !c || !im) {
+    showToast('⚠️ Semua kolom harus diisi!');
+    return;
+  }
+
+  const imgPath = 'images/' + sanitizeFileName(im);
+
+  // cek produk sama persis (nama + kategori + harga + gambar)
+  const idx = products.findIndex(p =>
+    p.name.trim() === n &&
+    p.category.trim() === c &&
+    Number(p.price) === pr &&
+    p.img.trim() === imgPath
+  );
+
+  if (idx !== -1) {
+    // replace produk lama
+    products[idx] = { id: products[idx].id, name: n, price: pr, category: c, img: imgPath };
+    showToast(`✅ Produk "${n}" diupdate`);
+  } else {
+    // tambah produk baru
+    products.push({ id: generateId(), name: n, price: pr, category: c, img: imgPath });
+    showToast(`✅ Produk "${n}" ditambahkan`);
+  }
+
   saveLocal();
-  ['name', 'price', 'category', 'imageName'].forEach(id => document.getElementById(id).value = '');
+
+  // reset form
+  ['name', 'price', 'categorySelect', 'customCategory', 'imageName'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  document.getElementById('customCategory').style.display = 'none';
   renderTable();
+  document.getElementById('name').focus();
 }
 
-function addProductPreset() {
-  const i = products.length + 1;
-  products.push({ id: generateId(), name: `Produk Contoh ${i}`, price: 5000 + i * 100, img: `images/contoh${i}.jpg`, category: 'lainnya' });
-  saveLocal(); renderTable();
-}
-
-function deleteById(id) {
-  if (!confirm('Yakin ingin menghapus produk ini?')) return;
-  products = products.filter(p => p.id !== id);
-  saveLocal(); renderTable();
-}
-
-function clearAllProducts() {
-  if (!products.length) { alert('Daftar produk kosong.'); return; }
-  if (confirm('Hapus semua produk? Tindakan ini tidak dapat dibatalkan.')) {
-    products = []; saveLocal(); renderTable();
-    if (jsonOutput) jsonOutput.textContent = '[ Kosong ]';
-    alert('✅ Semua produk dihapus.');
+// ===== TOGGLE CATEGORY CUSTOM =====
+function toggleCustomCategory(select) {
+  const customInput = document.getElementById('customCategory');
+  if (select.value === 'custom') {
+    customInput.style.display = 'inline-block';
+    customInput.focus();
+  } else {
+    customInput.style.display = 'none';
   }
 }
+
+// ===== TAMBAH PRODUK DENGAN TOAST =====
+function addProduct() {
+  const n = document.getElementById('name').value.trim();
+  const pr = Number(document.getElementById('price').value || 0);
+
+  let c = document.getElementById('categorySelect').value.trim();
+  if (c === 'custom') {
+    c = document.getElementById('customCategory').value.trim();
+  }
+
+  const im = document.getElementById('imageName').value.trim();
+
+  if (!n || !pr || !c || !im) {
+    alert('⚠️ Semua kolom harus diisi!');
+    return;
+  }
+
+  products.push({
+    id: generateId(),
+    name: n,
+    price: pr,
+    img: 'images/' + sanitizeFileName(im),
+    category: c
+  });
+
+  saveLocal();
+
+  ['name', 'price', 'categorySelect', 'customCategory', 'imageName'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  document.getElementById('customCategory').style.display = 'none';
+  renderTable();
+  document.getElementById('name').focus();
+
+  // ===== NOTIF TOAST =====
+  showToast(`✅ Produk "${n}" berhasil ditambahkan!`);
+}
+
+// ===== FUNSI TOAST =====
+function showToast(message) {
+  const toast = document.getElementById('toast');
+  toast.textContent = message;
+  toast.style.opacity = '1';
+  toast.style.pointerEvents = 'auto';
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    toast.style.pointerEvents = 'none';
+  }, 3000); // tampil 3 detik
+}
+
+
 
 // ===== JSON IMPORT =====
 function importJSON() {
@@ -147,21 +252,52 @@ function importJSON() {
   if (!ta) return alert('Area JSON tidak ditemukan.');
   const text = ta.value.trim();
   if (!text) return alert('JSON kosong.');
+
   try {
     const arr = JSON.parse(text.replace(/'/g, '"'));
     if (!Array.isArray(arr)) return alert('Format harus array!');
+
     arr.forEach(p => {
-      products.push({
-        id: generateId(),
-        name: p.name || '',
-        price: Number(p.price || 0),
-        img: (p.img && typeof p.img === 'string') ? (p.img.includes('/') ? p.img : 'images/' + sanitizeFileName(p.img)) : '',
-        category: p.category || ''
-      });
+      const name = (p.name || '').trim();
+      const price = Number(p.price || 0);
+      const category = (p.category || '').trim();
+      const img = (p.img && typeof p.img === 'string') 
+                  ? (p.img.includes('/') ? p.img : 'images/' + sanitizeFileName(p.img)) 
+                  : '';
+
+      if (!name || !price || !category || !img) return; // skip yg tidak lengkap
+
+      // cek produk sama persis
+      const idx = products.findIndex(prod =>
+        prod.name.trim() === name &&
+        prod.category.trim() === category &&
+        Number(prod.price) === price &&
+        prod.img.trim() === img
+      );
+
+      if (idx !== -1) {
+        // replace produk lama
+        products[idx] = { id: products[idx].id, name, price, category, img };
+      } else {
+        // tambah produk baru
+        products.push({ id: generateId(), name, price, category, img });
+      }
     });
-    saveLocal(); ta.value = ''; renderTable();
-    alert('✅ Data JSON berhasil ditambahkan!');
-  } catch (err) { alert('❌ JSON tidak valid: ' + err); }
+
+    saveLocal();
+    ta.value = '';
+    renderTable();
+    alert('✅ Data JSON berhasil diimport tanpa dobel!');
+  } catch (err) {
+    alert('❌ JSON tidak valid: ' + err);
+  }
+}
+
+function clearJSONInput() {
+  const input = document.getElementById('jsonInput');
+  if (input) {
+    input.value = ''; // kosongkan isi kolom teks
+  }
 }
 
 // ===== GENERATE JSON + SCROLL + COPY =====
@@ -313,9 +449,9 @@ async function uploadToGitHub() {
   btn.disabled = true;
   btn.textContent = '⏳ Mengunggah...';
 
-  const owner = 'NAMA_USER_ORG';          // ganti sesuai akun GitHub
-  const repo = 'NAMA_REPO';               // ganti sesuai repo
-  const path = 'data/produk-warung-emung.json';
+  const owner = 'WarungEmung26';
+const repo = 'WarungEmung';
+  const path = 'data/produk.json';
   const branch = 'main';
 
   try {
@@ -523,3 +659,267 @@ function hapusFileRepo() {
   if (!path) return alert('Masukkan path file yang ingin dihapus!');
   deleteFileFromGitHub(path);
 }
+
+// ===== AMBIL DATA PRODUK DARI REPO GITHUB (versi aman, integrasi ke products) =====
+async function loadProdukFromRepo() {
+  const token = document.getElementById('githubToken').value.trim();
+  if (!token) return alert('⚠️ Masukkan GitHub Token dulu.');
+
+  const owner = 'WarungEmung26'; // ubah sesuai akunmu
+  const repo  = 'WarungEmung';   // ubah sesuai repo
+  const branch = 'main';
+  const filePath = 'data/produk.json'; // path tetap
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${filePath}?ref=${branch}`, {
+      headers: {
+        Authorization: `token ${token}`,
+        Accept: 'application/vnd.github+json'
+      }
+    });
+
+    if (!res.ok) {
+      // tampilkan error lebih informatif
+      const text = await res.text().catch(() => '');
+      throw new Error(`Gagal ambil file (HTTP ${res.status}). ${text}`);
+    }
+
+    const meta = await res.json();
+    if (!meta.content) throw new Error('File kosong atau format tidak valid di GitHub.');
+
+    // decode base64 dan parse JSON
+    const decoded = atob(meta.content.replace(/\n/g, ''));
+    let jsonData;
+    try {
+      jsonData = JSON.parse(decoded);
+    } catch (err) {
+      throw new Error('Isi produk.json bukan JSON valid: ' + err.message);
+    }
+
+    if (!Array.isArray(jsonData)) throw new Error('Format produk.json harus array produk ([])');
+
+    // konversi ke format internal products, tambahkan id jika perlu
+    products = jsonData.map(p => ({
+      id: p.id || generateId(),
+      name: p.name || '',
+      price: Number(p.price || 0),
+      img: (p.img && typeof p.img === 'string') ? p.img : (p.image || ''),
+      category: p.category || ''
+    }));
+
+    // simpan dan render tabel (pakai fungsi yg sudah ada)
+    saveLocal();
+    renderTable();
+
+    alert('✅ Data produk berhasil dimuat dari GitHub!');
+  } catch (err) {
+    console.error('loadProdukFromRepo error:', err);
+    alert('❌ Error ambil produk: ' + err.message);
+  }
+}
+
+const owner = 'WarungEmung26'; // ganti sesuai akun GitHub
+const repo  = 'WarungEmung';    // ganti sesuai repo
+const branch = 'main';
+
+document.getElementById('loadFolder').addEventListener('click', async () => {
+  const token = document.getElementById('githubToken').value.trim();
+  const folderPath = document.getElementById('folderPath').value.trim();
+  if (!token || !folderPath) return alert('Masukkan token dan folder path');
+
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${folderPath}?ref=${branch}`, {
+      headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' }
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const files = await res.json();
+    const container = document.getElementById('fileList');
+    container.innerHTML = '';
+    if (files.length === 0) container.innerHTML = '<small>Folder kosong</small>';
+    files.forEach(file => {
+      const div = document.createElement('div');
+      div.innerHTML = `<input type="checkbox" data-sha="${file.sha}" data-path="${file.path}"> ${file.name}`;
+      container.appendChild(div);
+    });
+  } catch (err) {
+    alert('❌ Gagal load folder: ' + err.message);
+  }
+});
+
+document.getElementById('deleteAll').addEventListener('click', async () => {
+  const token = document.getElementById('githubToken').value.trim();
+  if (!token) return alert('Masukkan token');
+
+  const checkboxes = document.querySelectorAll('#fileList input[type=checkbox]');
+  if (checkboxes.length === 0) return alert('Folder kosong atau belum load');
+  if (!confirm('⚠️ Hapus semua file di folder ini?')) return;
+
+  for (const cb of checkboxes) {
+    const path = cb.dataset.path;
+    const sha  = cb.dataset.sha;
+    try {
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: 'DELETE',
+        headers: { Authorization: `token ${token}`, Accept: 'application/vnd.github+json' },
+        body: JSON.stringify({ message: `Hapus ${path}`, sha, branch })
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        console.error(`❌ Gagal hapus ${path}`, txt);
+      }
+    } catch (err) {
+      console.error(`❌ Error hapus ${path}`, err);
+    }
+  }
+
+  alert('✅ Semua file di folder dihapus');
+  document.getElementById('fileList').innerHTML = '<small>Folder kosong</small>';
+});
+
+/* ---------------------------
+  Token helper: simpan & muat token
+  - Menggunakan Web Crypto (AES-GCM) bila passphrase diberikan
+  - Fallback menyimpan plain jika passphrase kosong dan user pilih simpan plain
+----------------------------*/
+
+// util: base64 <-> ArrayBuffer
+function abToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let str = '';
+  for (let i = 0; i < bytes.byteLength; i++) str += String.fromCharCode(bytes[i]);
+  return btoa(str);
+}
+function base64ToAb(b64) {
+  const str = atob(b64);
+  const buf = new Uint8Array(str.length);
+  for (let i = 0; i < str.length; i++) buf[i] = str.charCodeAt(i);
+  return buf.buffer;
+}
+
+// derive key from passphrase using PBKDF2
+async function deriveKeyFromPassword(passphrase, saltBytes) {
+  const enc = new TextEncoder();
+  const passKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), {name: 'PBKDF2'}, false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations: 200000, hash: 'SHA-256' },
+    passKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+// encrypt token with passphrase -> returns object {ct, iv, salt} all base64
+async function encryptTokenWithPassphrase(token, passphrase) {
+  const enc = new TextEncoder();
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv   = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKeyFromPassword(passphrase, salt);
+  const ctBuf = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(token));
+  return { ct: abToBase64(ctBuf), iv: abToBase64(iv), salt: abToBase64(salt) };
+}
+
+// decrypt token using passphrase + stored {ct, iv, salt}
+async function decryptTokenWithPassphrase(obj, passphrase) {
+  try {
+    const iv = base64ToAb(obj.iv);
+    const salt = base64ToAb(obj.salt);
+    const key = await deriveKeyFromPassword(passphrase, new Uint8Array(salt));
+    const ptBuf = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: new Uint8Array(iv) }, key, base64ToAb(obj.ct));
+    return new TextDecoder().decode(ptBuf);
+  } catch (e) {
+    throw new Error('Gagal dekripsi — passphrase mungkin salah');
+  }
+}
+
+// storage keys
+const TOKEN_STORE_KEY = 'we_token_store_v1';
+const TOKEN_STORE_PLAIN_KEY = 'we_token_plain_v1';
+
+// UI elements
+const btnPaste = document.getElementById('btnPaste');
+const btnSave = document.getElementById('btnSave');
+const btnSavePlain = document.getElementById('btnSavePlain');
+const btnUseStored = document.getElementById('btnUseStored');
+const btnClearStored = document.getElementById('btnClearStored');
+const tokenInput = document.getElementById('githubToken');
+const passInput = document.getElementById('passphrase');
+
+btnPaste?.addEventListener('click', async () => {
+  try {
+    const text = await navigator.clipboard.readText();
+    if (text) {
+      tokenInput.value = text.trim();
+      showToast('📋 Token dipaste dari clipboard');
+    } else {
+      alert('Clipboard kosong atau izin ditolak');
+    }
+  } catch (err) {
+    alert('Gagal baca clipboard: ' + err.message);
+  }
+});
+
+btnSave?.addEventListener('click', async () => {
+  const token = tokenInput.value.trim();
+  const pass = passInput.value;
+  if (!token) return alert('Masukkan token dulu!');
+  if (!pass) return alert('Masukkan passphrase untuk enkripsi (atau gunakan tombol simpan plain)');
+  try {
+    const obj = await encryptTokenWithPassphrase(token, pass);
+    localStorage.setItem(TOKEN_STORE_KEY, JSON.stringify(obj));
+    // remove plain if any
+    localStorage.removeItem(TOKEN_STORE_PLAIN_KEY);
+    showToast('🔒 Token disimpan terenkripsi');
+  } catch (err) {
+    alert('Gagal simpan: ' + err.message);
+  }
+});
+
+btnSavePlain?.addEventListener('click', () => {
+  const token = tokenInput.value.trim();
+  if (!token) return alert('Masukkan token dulu!');
+  if (!confirm('Token akan disimpan tanpa enkripsi di browser. Lanjutkan?')) return;
+  localStorage.setItem(TOKEN_STORE_PLAIN_KEY, token);
+  localStorage.removeItem(TOKEN_STORE_KEY);
+  showToast('⚠️ Token disimpan plain (kurang aman)');
+});
+
+btnUseStored?.addEventListener('click', async () => {
+  // prioritas: jika ada encrypted store, pakai itu, minta passphrase
+  const encObjRaw = localStorage.getItem(TOKEN_STORE_KEY);
+  const plain = localStorage.getItem(TOKEN_STORE_PLAIN_KEY);
+  if (encObjRaw) {
+    const pass = passInput.value;
+    if (!pass) return alert('Masukkan passphrase untuk dekripsi token tersimpan.');
+    try {
+      const obj = JSON.parse(encObjRaw);
+      const token = await decryptTokenWithPassphrase(obj, pass);
+      tokenInput.value = token;
+      showToast('🔓 Token didekripsi dan dimasukkan');
+    } catch (err) {
+      alert(err.message || 'Gagal dekripsi token. Pastikan passphrase benar.');
+    }
+  } else if (plain) {
+    tokenInput.value = plain;
+    showToast('🔑 Token plain dimasukkan');
+  } else {
+    alert('Belum ada token tersimpan.');
+  }
+});
+
+btnClearStored?.addEventListener('click', () => {
+  if (!confirm('Hapus token tersimpan dari browser?')) return;
+  localStorage.removeItem(TOKEN_STORE_KEY);
+  localStorage.removeItem(TOKEN_STORE_PLAIN_KEY);
+  passInput.value = '';
+  showToast('✅ Token tersimpan dihapus');
+});
+
+/* optional: auto-fill token input on load if plain store present (but not encrypted) */
+window.addEventListener('load', () => {
+  const plain = localStorage.getItem(TOKEN_STORE_PLAIN_KEY);
+  if (plain) {
+    // jangan auto-paste encrypted token without passphrase
+    tokenInput.value = plain;
+  }
+});
