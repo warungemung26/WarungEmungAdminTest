@@ -10,20 +10,44 @@
 
 <h1>🛒 Admin Produk — Warung Emung</h1>
 
-<!-- FORM TAMBAH -->
-<div class="card">
-  <strong>Tambah Produk</strong>
-  <label>Nama Produk</label>
-  <input id="name" type="text">
-  <label>Harga (Rp)</label>
-  <input id="price" type="number">
-  <label>Kategori</label>
-  <input id="category" type="text">
-  <label>Nama Gambar</label>
-  <input id="imageName" type="text">
-  <div class="controls">
+    <!-- FORM TAMBAH -->
+  <section class="admin-section">
+  <h2>🛍️ Tambah Produk Baru</h2>
+  
+  <div class="admin-form">
+    <input type="text" id="name" placeholder="Nama Produk" autocomplete="off">
+    <input type="number" id="price" placeholder="Harga (Rp)">
+    
+    <!-- Kategori -->
+    <label>Kategori:</label>
+    <div class="cat-group">
+      <select id="categorySelect" onchange="toggleCustomCategory(this)">
+        <option value="">Pilih Kategori</option>
+        <option value="sembako">Sembako</option>
+        <option value="makanan">Makanan Cepat Saji</option>
+        <option value="mie">Mie Instan</option>
+        <option value="snack">Snack & Ringan</option>
+        <option value="minuman">Minuman Dingin</option>
+        <option value="minumansachet">Sachet & Obat-obatan</option>
+        <option value="rumah">Kebutuhan Rumah</option>
+        <option value="custom">Custom...</option>
+      </select>
+      <input type="text" id="customCategory" placeholder="Tulis kategori baru..." style="display:none;">
+    </div>
+
+    <!-- Gambar -->
+    <label>Gambar Produk:</label>
+    <div class="img-group">
+      <input type="text" id="imageName" placeholder="Nama file (tanpa ekstensi)">
+      <select id="imageExt">
+        <option value=".jpg" selected>.jpg</option>
+        <option value=".png">.png</option>
+        <option value=".jpeg">.jpeg</option>
+        <option value=".webp">.webp</option>
+        <option value=".svg">.svg</option>
+      </select>
+    </div>
     <button class="btn-add" onclick="addProduct()">+ Tambah Produk</button>
-    <button class="btn-add" onclick="addProductPreset()">+ Contoh Cepat</button>
   </div>
 </div>
 
@@ -32,24 +56,24 @@
   <strong>📥 Input Data JSON Manual</strong>
   <textarea id="jsonInput" placeholder='Tempelkan array JSON di sini...'></textarea>
   <div class="controls">
-    <button class="btn-add" onclick="importJSON()">📤 Tambah dari JSON</button>
-    <button class="btn-clear" onclick="clearJSONInput()">🗑️ Hapus Semua</button>
+    <button class="btn-add" onclick="importJSON()">📤 Tambah Produk dari JSON</button>
+    <button class="btn-clear" onclick="clearJSONInput()">🗑️ Hapus Input JSON</button>
   </div>
 </div>
 
-<!-- FILTER -->
-<div class="card">
+<!-- FILTER & SORT -->
+<div class="card" style="margin-bottom:15px; padding:10px;">
   <strong>🔍 Filter & Urut Produk</strong>
-  <div class="flex-between">
-    <div style="flex:1">
-      <label>Kategori</label>
-      <select id="filterCategory" onchange="applyFilter()">
+  <div class="flex-between" style="margin-top:8px;">
+    <div style="flex:1; margin-right:10px;">
+      <label for="filterCategory">Kategori</label>
+      <select id="filterCategory" onchange="applyFilter()" style="width:100%; padding:6px 8px; border-radius:6px; border:1px solid #ccc;">
         <option value="">Semua</option>
       </select>
     </div>
-    <div style="flex:1">
-      <label>Urut Berdasarkan</label>
-      <select id="sortOption" onchange="applyFilter()">
+    <div style="flex:1; margin-right:10px;">
+      <label for="sortOption">Urut Berdasarkan</label>
+      <select id="sortOption" onchange="applyFilter()" style="width:100%; padding:6px 8px; border-radius:6px; border:1px solid #ccc;">
         <option value="">Tidak diurutkan</option>
         <option value="nameAsc">Nama (A–Z)</option>
         <option value="nameDesc">Nama (Z–A)</option>
@@ -57,38 +81,85 @@
         <option value="priceHigh">Harga Termahal</option>
       </select>
     </div>
-    <div>
-      <button class="btn-clear" onclick="resetFilter()">🔄 Reset</button>
+    <div style="display:flex; align-items:end;">
+      <button class="btn-clear" onclick="resetFilter()" title="Reset Filter" style="font-size:1.2em; cursor:pointer;">🔄</button>
     </div>
   </div>
-  <div style="margin:10px 0;">
-    <input type="text" id="searchInput" placeholder="Cari produk..." oninput="applyFilter()" style="padding:6px 8px;width:200px;border-radius:6px;border:1px solid #ccc;">
+  <div style="margin-top:10px;">
+    <input type="text" id="searchInput" placeholder="Cari produk..." oninput="applyFilter()" 
+           style="padding:6px 8px; width:100%; max-width:250px; border-radius:6px; border:1px solid #ccc;">
   </div>
 </div>
 
-<!-- TABEL -->
+<!-- PRODUK HEADER -->
+<div id="produk-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+  <h3>📦 Daftar Produk</h3>
+<button onclick="loadProdukFromRepo()" title="Ambil Data Produk dari Repo">🔄</button>
+
+</div>
+
+<div id="daftar-produk"></div>
+
+<!-- TABEL PRODUK -->
 <div class="card table-wrap">
-  <div class="flex-between">
+  <div class="flex-between" style="margin-bottom:6px;">
     <strong>Daftar Produk</strong>
     <div>
-      <button class="btn-clear" onclick="clearAllProducts()">🗑️ Hapus Semua Produk</button>
+      <button id="deleteAllBtn" style="font-size:1.2em;cursor:pointer;">🗑️ Hapus Semua Produk</button>      
     </div>
   </div>
   <small class="muted">Klik sel untuk edit</small>
-  <table id="productTable">
+  <table id="productTable" style="width:100%; border-collapse:collapse; margin-top:6px;">
     <thead>
-      <tr><th>No</th><th>Nama</th><th>Harga</th><th>Kategori</th><th>Gambar</th><th>Aksi</th></tr>
+      <tr>
+        <th>No</th>
+        <th>Nama</th>
+        <th>Harga</th>
+        <th>Kategori</th>
+        <th>Gambar</th>
+        <th>Aksi</th>
+      </tr>
     </thead>
     <tbody></tbody>
   </table>
 </div>
 
+
+<!-- Token helper -->
+
+<div id="token-helper" style="margin:10px 0; padding:10px; border:1px dashed #ccc; border-radius:6px;">
+  <label><strong>GitHub Token (helper)</strong></label><br>
+  <input id="githubToken" type="password" placeholder="Masukkan token" style="width:60%;" autocomplete="off">
+
+  <div style="margin-top:8px;">
+    <button id="btnPaste">📋 Paste dari Clipboard</button>
+    <button id="btnUseStored">🔑 Gunakan token tersimpan</button>
+    <button id="btnSave">💾 Simpan (encrypt)</button>
+    <button id="btnSavePlain">💾 Simpan (plain)</button>
+    <button id="btnClearStored" style="color:#c00;">🗑 Hapus token tersimpan</button>
+  </div>
+
+  <div style="margin-top:8px;">
+    <input id="passphrase" type="password" placeholder="Passphrase (untuk enkripsi) — optional" style="width:60%;" autocomplete="off">
+    <small style="display:block; color:#555;">Masukkan passphrase bila ingin menyimpan terenkripsi. Jika kosong, token bisa disimpan plain (kurang aman).</small>
+  </div>
+</div>
+
+<!-- Folder Manager -->
+<div style="margin-top:20px;">
+  <h3>Hapus File GitHub per Folder</h3>
+  <label>Folder Path:</label>
+  <input type="text" id="folderPath" placeholder="Misal: images"><br><br>
+
+<button id="loadFolder">📂 Load Isi Folder</button> <button id="deleteAll">🗑️ Hapus Semua File</button>
+
+  <div id="fileList">
+    <small>Isi folder akan tampil di sini...</small>
+  </div>
+</div>
+
 <!-- UPLOAD -->
-<div class="card">
-  <label>GitHub Token</label>
-  <input id="githubToken" type="text">
-  <div class="controls">
-    <button class="btn-upload" id="uploadBtn" onclick="uploadToGitHub()">🚀 Upload ke GitHub</button>
+    <button class="btn-upload" id="uploadBtn" onclick="uploadToGitHub()">🚀 Upload JSON ke GitHub</button>
     <button class="btn-backup" onclick="downloadJSON()">⬇️ Download JSON</button>
     <button class="btn-backup" onclick="exportToExcel()">⬇️ Export Excel</button>
   </div>
@@ -102,12 +173,12 @@
   <!-- Daftar preview gambar -->
   <div id="previewArea" class="preview-area"></div>
 </div>
+
 <!-- Tombol hapus file di GitHub -->
 <div style="margin-top:10px">
   <input type="text" id="filePathDelete" placeholder="contoh: data/produk.json" style="width:70%;padding:6px">
   <button onclick="hapusFileRepo()">🗑️ Hapus File di Repo</button>
 </div>
-
 
 <!-- OUTPUT -->
 <div class="card">
@@ -117,7 +188,6 @@
   <pre id="jsonOutput">[ Kosong ]</pre>
 </div>
 
-<script src="script.js"></script>
 
 <!-- Tombol Floating -->
 <button class="fab" onclick="document.querySelector('#name').focus()" title="Tambah Produk">＋</button>
@@ -133,10 +203,29 @@
   <button onclick="document.querySelector('.table-wrap').scrollIntoView({behavior:'smooth'})">
     <span class="icon">📋</span><span>Tabel</span>
   </button>
+    <button onclick="document.querySelector('#token-helper').scrollIntoView({behavior:'smooth'})">
+    <span class="icon">🔐</span><span>Token</span>
+  </button>
   <button onclick="generateAndScrollJSON()">
     <span class="icon">💾</span><span>Generate JSON</span>
   </button>
 </nav>
 
+<!-- Tambahkan ini di <body>, paling bawah sebelum </body> -->
+<div id="toast" style="
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: #4caf50;
+    color: #fff;
+    padding: 10px 18px;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s;
+    z-index: 9999;
+"></div>
+<script src="script.js"></script>
 </body>
 </html>
