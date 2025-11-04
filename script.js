@@ -776,6 +776,56 @@ document.getElementById('deleteAll').addEventListener('click', async () => {
   document.getElementById('fileList').innerHTML = '<small>Folder kosong</small>';
 });
 
+// === HAPUS FILE TERPILIH SAJA ===
+document.getElementById("deleteSelected").addEventListener("click", async () => {
+  const token = document.getElementById("githubToken").value.trim();
+  if (!token) return alert("Masukkan GitHub Token dulu!");
+
+  const selected = Array.from(document.querySelectorAll("#fileList input:checked"));
+  if (selected.length === 0) return alert("Pilih dulu file yang ingin dihapus!");
+
+  if (!confirm(`Yakin mau hapus ${selected.length} file terpilih?`)) return;
+
+  const deleteBtn = document.getElementById("deleteSelected");
+  deleteBtn.disabled = true;
+  deleteBtn.textContent = "⏳ Menghapus...";
+
+  try {
+    for (const cb of selected) {
+      const path = cb.dataset.path;
+      const sha = cb.dataset.sha;
+
+      const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, {
+        method: "DELETE",
+        headers: {
+          "Authorization": `token ${token}`,
+          "Accept": "application/vnd.github+json"
+        },
+        body: JSON.stringify({
+          message: `Hapus file ${path}`,
+          sha,
+          branch
+        })
+      });
+
+      if (!res.ok) {
+        const err = await res.text();
+        console.error("❌ Gagal hapus", path, err);
+      } else {
+        console.log("✅ Berhasil hapus", path);
+      }
+    }
+
+    alert("✅ File terpilih berhasil dihapus!");
+    document.getElementById("loadFolder").click(); // reload daftar file otomatis
+  } catch (err) {
+    alert("❌ Terjadi kesalahan: " + err.message);
+  } finally {
+    deleteBtn.disabled = false;
+    deleteBtn.textContent = "🗑️ Hapus Terpilih";
+  }
+});
+
 /* ---------------------------
   Token helper: simpan & muat token
   - Menggunakan Web Crypto (AES-GCM) bila passphrase diberikan
